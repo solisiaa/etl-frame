@@ -20,9 +20,10 @@ class PostgresConnection:
 
     def __init__(self, dsn: str | None = None, **connect_kwargs: Any) -> None:
         """Store DSN (falls back to ``POSTGRES_URL`` env) and kwargs."""
-        self.dsn = dsn or os.getenv("POSTGRES_URL", "")
-        if not self.dsn:
+        resolved = dsn or os.getenv("POSTGRES_URL") or ""
+        if not resolved:
             raise ValueError("Postgres DSN is empty; set POSTGRES_URL or pass dsn=...")
+        self.dsn: str = resolved
         self.connect_kwargs = connect_kwargs
         self._conn: Any = None
 

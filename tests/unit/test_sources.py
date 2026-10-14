@@ -205,7 +205,8 @@ def test_postgres_source_async_fallback(monkeypatch: pytest.MonkeyPatch) -> None
     import asyncio
 
     _install_fake_psycopg(monkeypatch)
-    monkeypatch.delitem(sys.modules, "asyncpg", raising=False)
+    # None in sys.modules makes `import asyncpg` raise ImportError even if installed.
+    monkeypatch.setitem(sys.modules, "asyncpg", None)
     _FakePgConn.batches = [[(1, 1.0)]]
     src = PostgresSource(name="pg", params={"dsn": "db", "table": "t"})
     frames = asyncio.run(src.read_async())
