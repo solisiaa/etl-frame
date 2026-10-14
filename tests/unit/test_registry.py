@@ -5,9 +5,19 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from etl.core.base import BaseSource
+from etl.core.base import BaseSink, BaseSource, BaseTransformer
 from etl.core.exceptions import ConfigError
-from etl.core.registry import get_source, list_sources, register_source
+from etl.core.registry import (
+    get_sink,
+    get_source,
+    get_transformer,
+    list_sinks,
+    list_sources,
+    list_transformers,
+    register_sink,
+    register_source,
+    register_transformer,
+)
 
 
 def test_register_and_get_source() -> None:
@@ -39,3 +49,30 @@ def test_get_unknown_source_raises() -> None:
     """Unknown type -> ConfigError with available options listed."""
     with pytest.raises(ConfigError, match="Unknown source type"):
         get_source("definitely_not_a_source_xyz")
+
+
+def test_sink_and_transformer_registry() -> None:
+    """Sinks/transformers register, list, reject duplicates and unknown names."""
+
+    @register_sink("unit_sink_xyz")
+    class DummySink(BaseSink):
+        def write(self, data, ctx=None):  # type: ignore[no-untyped-def]
+            return 0
+
+    @register_transformer("unit_tr_xyz")
+    class DummyTr(BaseTransformer):
+        def transform(self, data):  # type: ignore[no-untyped-def]
+            yield from data
+
+    assert get_sink("unit_sink_xyz") is DummySink
+    assert get_transformer("unit_tr_xyz") is DummyTr
+    assert "unit_sink_xyz" in list_sinks()
+    assert "unit_tr_xyz" in list_transformers()
+    with pytest.raises(ConfigError):
+        register_sink("unit_sink_xyz")(DummySink)
+    with pytest.raises(ConfigError):
+        register_transformer("unit_tr_xyz")(DummyTr)
+    with pytest.raises(ConfigError, match="Unknown sink type"):
+        get_sink("definitely_not_a_sink_xyz")
+    with pytest.raises(ConfigError, match="Unknown transformer type"):
+        get_transformer("definitely_not_a_transformer_xyz")

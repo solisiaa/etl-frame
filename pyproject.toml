@@ -48,6 +48,7 @@ where = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "--cov=etl --cov-report=term-missing"
+markers = ["integration: requires live Postgres/MinIO; skipped otherwise"]
 
 [tool.coverage.run]
 source = ["etl"]
@@ -68,6 +69,10 @@ ignore = [
   "DTZ011", # date.today() is fine for S3 key partitioning.
   "T201", # print() allowed in scripts/seed_data.py CLI.
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Test doubles/mocks legitimately ignore unused args and bare returns.
+"tests/**" = ["ARG001", "ARG002", "ARG005", "RET501"]
 
 [tool.ruff.format]
 quote-style = "double"

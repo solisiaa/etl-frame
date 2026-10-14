@@ -56,17 +56,17 @@ class PostgresSink(BaseSink):
             with PostgresConnection(self._dsn()) as conn, conn.cursor() as cur:
                 if cfg.mode == "replace":
                     cur.execute(f'DROP TABLE IF EXISTS "{cfg.table}"')
-                    first = True
-                    for chunk in data:
-                        if chunk.empty:
-                            continue
-                        if cfg.mode == "replace" and first:
-                            self._create_from_frame(cur, cfg.table, chunk)
-                        elif first and cfg.mode == "append":
-                            self._ensure_table(cur, cfg.table, chunk)
-                        self._write_chunk(cur, cfg, chunk)
-                        total += len(chunk)
-                        first = False
+                first = True
+                for chunk in data:
+                    if chunk.empty:
+                        continue
+                    if cfg.mode == "replace" and first:
+                        self._create_from_frame(cur, cfg.table, chunk)
+                    elif first and cfg.mode == "append":
+                        self._ensure_table(cur, cfg.table, chunk)
+                    self._write_chunk(cur, cfg, chunk)
+                    total += len(chunk)
+                    first = False
         except Exception as exc:
             raise SinkError(f"Postgres sink '{self.name}' failed: {exc}") from exc
         return total
@@ -83,17 +83,11 @@ class PostgresSink(BaseSink):
         return mapping.get(dtype, "TEXT")
 
     def _ensure_table(self, cur: Any, table: str, frame: pd.DataFrame) -> None:
-        cols = ", ".join(
-            f'"{c}" {self._sql_type(str(t))}'
-            for c, t in zip(frame.columns, frame.dtypes, strict=True)
-        )
+        cols = ", ".join(f'"{c}" {self._sql_type(str(t))}' for c, t in frame.dtypes.items())
         cur.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({cols})')
 
     def _create_from_frame(self, cur: Any, table: str, frame: pd.DataFrame) -> None:
-        cols = ", ".join(
-            f'"{c}" {self._sql_type(str(t))}'
-            for c, t in zip(frame.columns, frame.dtypes, strict=True)
-        )
+        cols = ", ".join(f'"{c}" {self._sql_type(str(t))}' for c, t in frame.dtypes.items())
         cur.execute(f'CREATE TABLE "{table}" ({cols})')
 
     def _write_chunk(self, cur: Any, cfg: PostgresSinkConfig, chunk: pd.DataFrame) -> None:
