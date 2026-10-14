@@ -25,7 +25,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       POSTGRES_URL: postgresql://etl:etl@localhost:5432/etl
-      MINIO_ENDPOINT: http://localhost:9000
+      # S3-совместимое хранилище для тестов — moto server (см. шаг ниже).
+      MINIO_ENDPOINT: http://localhost:5000
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_DEFAULT_REGION: us-east-1
@@ -44,31 +45,43 @@ jobs:
         run: ruff format --check src tests scripts
       - name: Mypy strict
         run: mypy src
-      # MinIO не может работать как `services:` — образу нужна
-      # команда `server /data`, которую схема services не поддерживает
-      # (отсюда был Docker pull/start fail). Поднимаем его обычным docker run.
-      # Образы MinIO удалены с Docker Hub (~сен. 2026), качаем с Quay.
-      - name: Start MinIO
+      # S3 для integration-тестов: MinIO больше нельзя анонимно скачать
+      # ни с Docker Hub (образы удалены ~сен. 2026), ни с Quay (приватно),
+      # поэтому поднимаем moto server — pip-устанавливаемый S3-мок без docker.
+      # Наш код ходит в S3 только через boto3 + endpoint_url, ему всё равно.
+      - name: Start S3 mock (moto server)
         run: |
-          docker run -d --name minio \
-            -p 9000:9000 -p 9001:9001 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:latest server /data --console-address ":9001"
+          pip install "moto[server]"
+          nohup moto_server -H 127.0.0.1 -p 5000 > moto.log 2>&1 &
           for i in $(seq 1 30); do
-            curl -sf http://localhost:9000/minio/health/live && break
+            python -c "
+          import boto3
+          boto3.client('s3', endpoint_url='http://127.0.0.1:5000',
+                       aws_access_key_id='x', aws_secret_access_key='x',
+                       region_name='us-east-1').list_buckets()
+          " 2>/dev/null && break
             sleep 2
           done
-          curl -sf http://localhost:9000/minio/health/live
-      - name: Create MinIO bucket
-        # Не валим весь CI, если MinIO недоступен: minio-тест сам skip'нется.
+          python -c "
+          import boto3
+          print(boto3.client('s3', endpoint_url='http://127.0.0.1:5000',
+                             aws_access_key_id='x', aws_secret_access_key='x',
+                             region_name='us-east-1').list_buckets())
+          "
+      - name: Create S3 bucket
+        # Не валим весь CI, если мок недоступен: s3-тест сам skip'нется.
         continue-on-error: true
         run: |
-          pip install minio
           python -c "
-          from minio import Minio
-          c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-          if not c.bucket_exists('etl-output'): c.make_bucket('etl-output')
+          import boto3
+          s3 = boto3.client('s3', endpoint_url='http://localhost:5000',
+                            aws_access_key_id='minioadmin',
+                            aws_secret_access_key='minioadmin',
+                            region_name='us-east-1')
+          try:
+              s3.head_bucket(Bucket='etl-output')
+          except Exception:
+              s3.create_bucket(Bucket='etl-output')
           "
       - name: Pytest
         run: pytest -v --cov=etl --cov-fail-under=80
