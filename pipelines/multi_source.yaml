@@ -1,0 +1,39 @@
+name: multi_source
+description: "Демо параллельной загрузки из CSV + API с агрегацией ошибок"
+
+sources:
+  - name: sales_csv
+    type: csv
+    params:
+      path: data/sample_sales.csv
+      chunk_size: 20000
+  - name: fx_api
+    type: api
+    params:
+      url: https://api.exchangerate.host/latest
+      method: GET
+      timeout: 10
+      params:
+        base: USD
+
+transformers:
+  - type: clean
+    params:
+      drop_nulls: [amount]
+      dedup_on: [order_id]
+  - type: enrich
+    params:
+      add_columns:
+        revenue: "amount * quantity"
+
+sinks:
+  - name: to_csv
+    type: csv
+    params:
+      path: output/multi_source_out.csv
+      mode: overwrite
+
+execution:
+  parallel_sources: true
+  max_concurrency: 4
+  retry: {times: 2, backoff: 1.0}

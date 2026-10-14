@@ -1,0 +1,83 @@
+[project]
+name = "etl-framework"
+version = "0.1.0"
+description = "Extensible ETL framework: CSV/API/Postgres -> clean/enrich/aggregate -> Postgres/S3/CSV"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "etl-frame" }]
+dependencies = [
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "pyarrow>=13.0",
+  "psycopg[binary]>=3.1",
+  "asyncpg>=0.29",
+  "boto3>=1.28",
+  "aioboto3>=12.0",
+  "aiofiles>=23.0",
+  "httpx>=0.25",
+  "typer>=0.9",
+  "rich>=13.0",
+  "pydantic>=2.0",
+  "pydantic-settings>=2.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-asyncio>=0.21",
+  "pytest-cov>=4.1",
+  "ruff>=0.1",
+  "mypy>=1.7",
+  "types-pyyaml",
+  "pandas-stubs",
+]
+
+[project.scripts]
+etl = "etl.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=etl --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["etl"]
+branch = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RET", "ARG", "DTZ", "T20"]
+ignore = [
+  "RET504",
+  "UP024", # IOError is intentional in @retry spec examples (alias of OSError).
+  "UP045", # Allow Optional[X] for wider compat; X|None also accepted.
+  "UP007", # Allow Union[X, Y] in Pydantic models for py39 compat.
+  "ARG002", # Unused `ctx` in sink.write() keeps a stable plugin signature.
+  "DTZ011", # date.today() is fine for S3 key partitioning.
+  "T201", # print() allowed in scripts/seed_data.py CLI.
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+show_error_codes = true
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = false
+strict = false

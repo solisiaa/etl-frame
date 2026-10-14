@@ -1,0 +1,43 @@
+name: sales_etl
+description: "Загрузка продаж из CSV, очистка, выгрузка в Postgres и MinIO"
+
+sources:
+  - name: sales_csv
+    type: csv
+    params:
+      path: data/sample_sales.csv
+      chunk_size: 50000
+
+transformers:
+  - type: clean
+    params:
+      drop_nulls: [amount, customer_id]
+      dedup_on: [order_id]
+  - type: enrich
+    params:
+      add_columns:
+        revenue: "amount * quantity"
+  - type: aggregate
+    params:
+      group_by: [customer_id]
+      aggs: {revenue: sum, quantity: sum}
+
+sinks:
+  - name: to_postgres
+    type: postgres
+    params:
+      table: sales_agg
+      mode: upsert
+      conflict_keys: [customer_id]
+      batch_size: 5000
+  - name: to_minio
+    type: s3
+    params:
+      bucket: etl-output
+      key: "sales/{date}/agg.parquet"
+      format: parquet
+
+execution:
+  parallel_sources: true
+  max_concurrency: 4
+  retry: {times: 3, backoff: 2.0}
