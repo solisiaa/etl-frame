@@ -44,16 +44,17 @@ jobs:
         run: ruff format --check src tests scripts
       - name: Mypy strict
         run: mypy src
-      # MinIO не может работать как `services:` — образу minio/minio нужна
+      # MinIO не может работать как `services:` — образу нужна
       # команда `server /data`, которую схема services не поддерживает
       # (отсюда был Docker pull/start fail). Поднимаем его обычным docker run.
+      # Образы MinIO удалены с Docker Hub (~сен. 2026), качаем с Quay.
       - name: Start MinIO
         run: |
           docker run -d --name minio \
             -p 9000:9000 -p 9001:9001 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:latest server /data --console-address ":9001"
+            quay.io/minio/minio:latest server /data --console-address ":9001"
           for i in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 2
