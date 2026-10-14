@@ -62,8 +62,12 @@ class PostgresSink(BaseSink):
                         continue
                     if cfg.mode == "replace" and first:
                         self._create_from_frame(cur, cfg.table, chunk)
-                    elif first and cfg.mode == "append":
+                    elif first and cfg.mode in ("append", "upsert"):
+                        # upsert needs the table AND a unique arbiter for
+                        # ON CONFLICT; both are IF NOT EXISTS → idempotent.
                         self._ensure_table(cur, cfg.table, chunk)
+                        if cfg.mode == "upsert" and cfg.conflict_keys:
+                            self._ensure_conflict_index(cur, cfg)
                     self._write_chunk(cur, cfg, chunk)
                     total += len(chunk)
                     first = False
@@ -89,6 +93,14 @@ class PostgresSink(BaseSink):
     def _create_from_frame(self, cur: Any, table: str, frame: pd.DataFrame) -> None:
         cols = ", ".join(f'"{c}" {self._sql_type(str(t))}' for c, t in frame.dtypes.items())
         cur.execute(f'CREATE TABLE "{table}" ({cols})')
+
+    @staticmethod
+    def _ensure_conflict_index(cur: Any, cfg: PostgresSinkConfig) -> None:
+        """Create a unique index over conflict keys for ON CONFLICT (idempotent)."""
+        cols = ", ".join(f'"{k}"' for k in cfg.conflict_keys)
+        cur.execute(
+            f'CREATE UNIQUE INDEX IF NOT EXISTS "{cfg.table}_upsert_uidx" ON "{cfg.table}" ({cols})'
+        )
 
     def _write_chunk(self, cur: Any, cfg: PostgresSinkConfig, chunk: pd.DataFrame) -> None:
         cols = list(chunk.columns)

@@ -209,6 +209,9 @@ def test_postgres_sink_replace_and_upsert(monkeypatch: pytest.MonkeyPatch) -> No
     )
     assert upsert.write(iter([_frame()])) == 2
     assert "ON CONFLICT" in _FakeConn.cursor_obj.batches[0][0]
+    stmts = _FakeConn.cursor_obj.statements
+    assert any("CREATE TABLE IF NOT EXISTS" in s for s in stmts)
+    assert any("CREATE UNIQUE INDEX IF NOT EXISTS" in s for s in stmts)
 
 
 def test_postgres_sink_empty_and_errors(monkeypatch: pytest.MonkeyPatch) -> None:
